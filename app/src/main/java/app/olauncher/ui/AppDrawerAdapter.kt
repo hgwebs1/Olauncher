@@ -91,19 +91,23 @@ class AppDrawerAdapter(
 
     private fun createAppFilter(): Filter {
         return object : Filter() {
-            override fun performFiltering(charSearch: CharSequence?): FilterResults {
+                        override fun performFiltering(charSearch: CharSequence?): FilterResults {
                 isBangSearch = charSearch?.startsWith("!") ?: false
                 autoLaunch = charSearch?.startsWith(" ")?.not() ?: true
 
-                val appFilteredList = (if (charSearch.isNullOrBlank()) appsList
-                else appsList.filter { app ->
-                    appLabelMatches(app.appLabel, charSearch)
-                } as MutableList<AppModel>)
+                val filtered = if (charSearch.isNullOrBlank()) appsList 
+                               else appsList.filter { appLabelMatches(it.appLabel, charSearch) }
+
+                // New apps top par aur khali space ko beech mein aane se rokna
+                val sortedFilteredList = filtered.filter { it.appLabel.isNotBlank() }
+                    .sortedWith(compareByDescending<AppModel> { it.isNew }.thenBy { it.appLabel.lowercase() })
+                    .toMutableList()
 
                 val filterResults = FilterResults()
-                filterResults.values = appFilteredList
+                filterResults.values = sortedFilteredList
                 return filterResults
             }
+
 
             @Suppress("UNCHECKED_CAST")
             override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
@@ -140,21 +144,19 @@ class AppDrawerAdapter(
     }
 
     fun setAppList(appsList: MutableList<AppModel>) {
-        // Add empty app for bottom padding in recyclerview and assign to list
-        appsList.add(
-            AppModel.App(
-                appLabel = "",
-                key = null,
-                appPackage = "",
-                activityClassName = "",
-                isNew = false,
-                user = android.os.Process.myUserHandle()
-            )
-        )
-        this.appsList = appsList
-        this.appFilteredList = appsList
-        submitList(appsList)
+        // 1. Pehle apps sort karein (New apps top par, phir A-Z) aur khali space filter karein
+        val sortedList = appsList.filter { it.appLabel.isNotBlank() }
+            .sortedWith(compareByDescending<AppModel> { it.isNew }.thenBy { it.appLabel.lowercase() })
+            .toMutableList()
+
+        // 2. AB LAST MEIN khali padding add karein
+        sortedList.add(AppModel.App(appLabel = "", key = null, appPackage = "", activityClassName = "", isNew = false, user = android.os.Process.myUserHandle()))
+
+        this.appsList = sortedList
+        this.appFilteredList = sortedList
+        submitList(sortedList)
     }
+
 
     fun launchFirstInList() {
         if (appFilteredList.size > 0)
